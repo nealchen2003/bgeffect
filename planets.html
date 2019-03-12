@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Planets</title>
+</head>
+<body>
+<script type="text/javascript">
+	! function () {
+		function measure_size() {
+			info.cw = canvas.width  = window.innerWidth  || document.documentElement.clientWidth  || document.body.clientWidth,
+			info.ch = canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+		}
+
+		function init() {
+			let script_list=document.getElementsByTagName("script"), len=script_list.length, me=script_list[len-1];
+			return {
+				l:  len,
+				z:  me.getAttribute("zIndex")  || -1,
+				o:  me.getAttribute("opacity") || 0.25,
+				c1: me.getAttribute("color1")  || "255,35,255",
+				c2: me.getAttribute("color2")  || "0,191,255",
+				n:  me.getAttribute("count")   || 100
+			};
+		}
+
+		function distance2(A, B) {
+			return (A.x-B.x)*(A.x-B.x)+(A.y-B.y)*(A.y-B.y);
+		}
+
+		function spawn() {
+			t.push({
+				x:  Math.random()*info.cw,
+				y:  Math.random()*info.ch,
+				vx: 2*Math.random()-1,
+				vy: 2*Math.random()-1,
+				sz: 2*Math.random()+0.5,
+				q:  2.5,
+				max: 9600
+			});
+		}
+
+		function do_paint() {
+			e.clearRect(0, 0, info.cw, info.ch);
+			if(f.x!==null && f.y!==null) {
+				e.beginPath();
+				e.lineWidth = 2;
+				e.arc(f.x, f.y, Math.sqrt(f.max), 0, 2*Math.PI);
+				e.strokeStyle = "rgba("+info.c1+", 0.5)";
+				e.stroke();
+			}
+			let w=[f].concat(t);
+			for(let i of t) {
+				e.fillRect(i.x-0.5*i.sz, i.y-0.5*i.sz, i.sz, i.sz);
+				for(let j of w) {
+					if(i!==j && j.x!==null && j.y!==null) {
+						let d=distance2(i, j);
+						if(d<=j.max) {
+							let A = (j.max-d)/j.max;
+							e.beginPath();
+							e.lineWidth = A*2;
+							e.strokeStyle = "rgba("+(d>=j.max*0.35 ? info.c1 : info.c2)+","+(A+0.2)+")";
+							e.moveTo(i.x, i.y);
+							e.lineTo(j.x, j.y);
+							e.stroke();
+						}
+					}
+				}
+			}
+			animation_caller(do_paint);
+		}
+
+		function do_move() {
+			if(pause) return;
+			let w=[f].concat(t);
+			for(let idx in t) {
+				let i=t[idx];
+				if(!pause) i.x += i.vx, i.y += i.vy;
+				if(i.x>info.cw || i.x<0) i.vx=-i.vx;
+				if(i.y>info.ch || i.y<0) i.vy=-i.vy;
+				i.vx *= 0.99, i.vy *= 0.99;
+				for(let x of w) {
+					if(i!==x && x.x!==null && x.y!==null) {
+						let	dx=i.x-x.x, dy=i.y-x.y, d=dx*dx+dy*dy;
+						if(d<=x.max*0.01) {
+							t.splice(idx, 1);
+							w=[f].concat(t);
+							setTimeout(spawn, 10000);
+							break;
+						}
+						dx /= Math.sqrt(d);
+						dy /= Math.sqrt(d);
+						i.vx += i.q*x.q*dx/d;
+						i.vy += i.q*x.q*dy/d;
+						if(x===f && d<=x.max) {
+							let xx=i.vx, yy=i.vy;
+							i.vx -= 0.1*yy;
+							i.vy += 0.1*xx;
+						}
+					}
+				}
+			}
+			animation_caller(do_move);
+		}
+
+		var canvas = document.createElement("canvas"),
+			info = init(),
+			c = "c_n" + info.l,
+			e = canvas.getContext("2d"),
+			animation_caller =
+				window.requestAnimationFrame		||
+				window.webkitRequestAnimationFrame	||
+				window.mozRequestAnimationFrame		||
+				window.oRequestAnimationFrame		||
+				window.msRequestAnimationFrame		||
+				function (i) {window.setTimeout(i, 1000/45)},
+			pause=false,
+			f = {
+				x: null,
+				y: null,
+				q: -200,
+				max: 20000
+			},
+			t = [],
+			cur_edit = null;
+		canvas.id = c;
+		canvas.style.cssText = "position: fixed; top: 0; left: 0; z-index: " + info.z + "; opacity: " + info.o;
+		document.getElementsByTagName("body")[0].appendChild(canvas);
+		measure_size();
+		window.onresize = measure_size;
+		window.onclick = function (i) {
+			if(!pause) {
+				i = i || window.event;
+				f.x = i.clientX;
+				f.y = i.clientY;
+			}
+		};
+		window.onmousedown = function (i) {
+			i = i || window.event;
+			if(pause) {
+				cur_edit=null;
+				let pos={x: i.clientX, y: i. clientY};
+				for(let j in t) {
+					if(cur_edit===null || distance2(pos, t[j])<distance2(pos, t[cur_edit])) {
+						cur_edit=j;
+					}
+				}
+			}
+		};
+		window.onmousemove = function (i) {
+			i = i || window.event;
+			if(pause) {
+				if(cur_edit===null) {
+					let choice=null, pos={x: i.clientX, y: i. clientY};
+					for(let j in t) {
+						if(choice===null || distance2(pos, t[j])<distance2(pos, t[choice])) {
+							choice=j;
+						}
+					}
+				} else {
+					t[cur_edit].x=i.clientX;
+					t[cur_edit].y=i.clientY;
+				}
+			}
+		};
+		window.onmouseup = function (i) {
+			i = i || window.event;
+			if(pause) {
+				t[cur_edit].x=i.clientX;
+				t[cur_edit].y=i.clientY;
+				cur_edit=null;
+			}
+		};
+		window.onkeypress = function (i) {
+			if(i.charCode!==32) return;
+			if(pause) {
+				pause=false;
+				setTimeout(do_move, 100);
+			} else {
+				pause=true;
+			}
+		};
+		for(let p=0; p<info.n; p++) spawn();
+		setTimeout(do_paint, 100);
+		setTimeout(do_move, 100);
+	}();
+</script>
+</body>
+</html>
